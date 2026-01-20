@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -8,9 +8,12 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { searchOrders } from "../../api/orders.api";
+import { mapOrderFromApi } from "../../utils/orderMapper";
 
 /* ===================== COLORS (LOCAL) ===================== */
 const COLORS = {
@@ -23,53 +26,38 @@ const COLORS = {
   LINK: "#2563eb",
 };
 
-/* ===================== MOCK DATA (replace with API later) ===================== */
-const COMPLETED_ORDERS = [
-  {
-    id: "1",
-    addressOrderId: "Test Order 12 Nov 2025 AGAIN by SAJID",
-    orderType: "2D FloorPlan",
-    code: "NEW TEST",
-    preference: "NEW TEST",
-    orderTime: "2025-11-12 17:43:53",
-    doneTime: "2025-11-12 17:50:36",
-    originalLink: "N/A",
-    finalFilesLink: "N/A",
-    originalFilesAvailable: true,
-    finalFilesAvailable: true,
-  },
-  {
-    id: "2",
-    addressOrderId: "Sajid Test Order 12 Nov 2025",
-    orderType: "2D FloorPlan",
-    code: "Test",
-    preference: "Sajid Test Order 12 Nov 2025",
-    orderTime: "2025-11-12 17:31:00",
-    doneTime: "2025-11-12 17:40:08",
-    originalLink: "N/A",
-    finalFilesLink: "Completed Test Order Umar Iftikhar",
-    originalFilesAvailable: true,
-    finalFilesAvailable: true,
-  },
-  {
-    id: "3",
-    addressOrderId: "Test",
-    orderType: "Photo Editing",
-    code: "—",
-    preference: "—",
-    orderTime: "2025-06-11 13:16:52",
-    doneTime: "2025-09-19 17:44:28",
-    originalLink: "N/A",
-    finalFilesLink: "1",
-    originalFilesAvailable: true,
-    finalFilesAvailable: true,
-  },
-];
-
 export default function OrdersHome({ navigation }) {
+  const [search, setSearch] = useState("");
+  const [orders, setOrders] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+
+  const debounceTimer = useRef(null);
+
+  /* ===================== 300ms DEBOUNCE ===================== */
+  const handleSearchChange = (text) => {
+    setSearch(text);
+
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+
+    debounceTimer.current = setTimeout(() => {
+      setSearchLoading(true);
+
+      searchOrders(text)
+        .then((res) => {
+          const list = Array.isArray(res?.data) ? res.data : [];
+          const mapped = list.map(mapOrderFromApi);
+          setOrders(mapped);
+        })
+        .catch(() => setOrders([]))
+        .finally(() => setSearchLoading(false));
+    }, 300);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
-      {/* Same header style as dashboard */}
+      {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.avatar}>
@@ -91,13 +79,46 @@ export default function OrdersHome({ navigation }) {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <FlatList
-          data={COMPLETED_ORDERS}
-          keyExtractor={(item) => item.id}
+          data={orders}
+          keyExtractor={(item, index) =>
+            item?.id ? String(item.id) : String(index)
+          }
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
             <>
+              {/* NAV BUTTONS */}
+              <PrimaryNavButton
+                icon="add-circle-outline"
+                title="Place a New Order"
+                subtitle="Create a new order request"
+                onPress={() => navigation.navigate("PlaceOrder")}
+                activeOpacity={0.85}
+              />
+
+              <PrimaryNavButton
+                icon="time-outline"
+                title="In Process Orders"
+                subtitle="Orders currently being worked on"
+                onPress={() => navigation.navigate("InProcessOrders")}
+                activeOpacity={0.85}
+              />
+
+              <PrimaryNavButton
+                icon="alert-circle-outline"
+                title="Pending Orders"
+                subtitle="Orders awaiting approval or action"
+                onPress={() => navigation.navigate("PendingOrders")}
+                activeOpacity={0.85}
+              />
+              <PrimaryNavButton
+                icon="checkmark-done-outline"
+                title="Completed Orders"
+                subtitle="All the completed orders"
+                onPress={() => navigation.navigate("CompletedOrders")}
+                activeOpacity={0.85}
+              />
               {/* SEARCH */}
               <View style={styles.searchBox}>
                 <Ionicons
@@ -109,47 +130,39 @@ export default function OrdersHome({ navigation }) {
                   placeholder="Type address or Order ID to search..."
                   placeholderTextColor={COLORS.TEXT_SECONDARY}
                   style={styles.searchInput}
+                  value={search}
+                  onChangeText={handleSearchChange}
                 />
+                {searchLoading && (
+                  <ActivityIndicator
+                    size="small"
+                    color={COLORS.TEXT_SECONDARY}
+                  />
+                )}
               </View>
-
-              {/* BIG PRIMARY BUTTONS (one per line) */}
-              <PrimaryNavButton
-                icon="add-circle-outline"
-                title="Place a New Order"
-                subtitle="Create a new order request"
-                onPress={() => navigation.navigate("PlaceOrder")}
-              />
-
-              <PrimaryNavButton
-                icon="time-outline"
-                title="In Process Orders"
-                subtitle="Orders currently being worked on"
-                onPress={() => console.log("In Process Orders")}
-              />
-
-              <PrimaryNavButton
-                icon="alert-circle-outline"
-                title="Pending Orders"
-                subtitle="Orders awaiting approval or action"
-                onPress={() => console.log("Pending Orders")}
-              />
-
               {/* SECTION HEADER */}
               <View style={styles.sectionHeader}>
-                <View>
-                  <Text style={styles.sectionTitle}>Completed Orders</Text>
-                  <Text style={styles.sectionSub}>
-                    These orders have been completed.
-                  </Text>
-                </View>
-
+                <Text style={styles.sectionTitle}>All Orders</Text>
                 <View style={styles.countPill}>
-                  <Text style={styles.countText}>
-                    {COMPLETED_ORDERS.length}
-                  </Text>
+                  <Text style={styles.countText}>{orders.length}</Text>
                 </View>
               </View>
             </>
+          }
+          ListEmptyComponent={
+            !searchLoading && (
+              <View style={styles.emptyState}>
+                <Ionicons
+                  name="search-outline"
+                  size={40}
+                  color={COLORS.TEXT_SECONDARY}
+                />
+                <Text style={styles.emptyTitle}>No Orders Found</Text>
+                <Text style={styles.emptySub}>
+                  Search by address or Order ID to see results.
+                </Text>
+              </View>
+            )
           }
           renderItem={({ item }) => <CompletedOrderCard order={item} />}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
@@ -159,7 +172,7 @@ export default function OrdersHome({ navigation }) {
   );
 }
 
-/* COMPONENTS */
+/* ===================== COMPONENTS ===================== */
 
 function PrimaryNavButton({ icon, title, subtitle, onPress }) {
   return (
@@ -167,61 +180,67 @@ function PrimaryNavButton({ icon, title, subtitle, onPress }) {
       <View style={styles.primaryButtonIcon}>
         <Ionicons name={icon} size={24} color="#fff" />
       </View>
-
       <View style={{ flex: 1 }}>
         <Text style={styles.primaryButtonTitle}>{title}</Text>
         <Text style={styles.primaryButtonSub}>{subtitle}</Text>
       </View>
-
       <Ionicons name="chevron-forward-outline" size={20} color="#fff" />
     </TouchableOpacity>
   );
 }
 
+/* ===================== CARD (N/A SAFE) ===================== */
+
 function CompletedOrderCard({ order }) {
+  const safe = (v) => (v === undefined || v === null || v === "" ? "N/A" : v);
+
   return (
     <View style={styles.orderCard}>
-      {/* Row 1 */}
       <View style={styles.rowBetween}>
         <Text style={styles.orderAddress} numberOfLines={2}>
-          {order.addressOrderId}
+          {safe(order?.addressOrderId)}
         </Text>
         <View style={styles.statusPill}>
-          <Text style={styles.statusText}>Completed</Text>
+          <Text style={styles.statusText}>
+            {safe(order?.status || "Completed")}
+          </Text>
         </View>
       </View>
 
-      {/* Grid rows (like table fields, mobile-friendly) */}
       <View style={styles.metaGrid}>
-        <MetaItem label="Order Type" value={order.orderType} />
-        <MetaItem label="Code" value={order.code} />
+        <MetaItem label="Order Type" value={safe(order?.orderType)} />
+        <MetaItem label="Code" value={safe(order?.code)} />
       </View>
 
       <View style={styles.metaGrid}>
-        <MetaItem label="Preference" value={order.preference} />
+        <MetaItem label="Preference" value={safe(order?.preference)} />
       </View>
 
       <View style={styles.metaGrid}>
-        <MetaItem label="Order Time" value={order.orderTime} />
-        <MetaItem label="Done Time" value={order.doneTime} />
+        <MetaItem label="Order Time" value={safe(order?.orderTime)} />
+        <MetaItem label="Done Time" value={safe(order?.doneTime)} />
       </View>
 
       <View style={styles.metaGrid}>
-        <MetaLink label="Original Link" value={order.originalLink} />
-        <MetaLink label="Final Files Link" value={order.finalFilesLink} />
+        <MetaLink label="Original Link" value={safe(order?.originalLink)} />
+        <MetaLink
+          label="Final Files Link"
+          value={safe(order?.finalFilesLink)}
+        />
       </View>
 
-      {/* Files actions */}
       <View style={styles.filesRow}>
         <FileButton
-          label="Original Files"
-          available={order.originalFilesAvailable}
-          onPress={() => console.log("Original Files", order.id)}
+          label="Request Amendment"
+          icon="create-outline"
+          available={!!order?.originalFilesAvailable}
+          onPress={() => {}}
         />
         <FileButton
-          label="Final Files"
-          available={order.finalFilesAvailable}
-          onPress={() => console.log("Final Files", order.id)}
+          label="Download Files"
+          icon="download-outline"
+          available={!!order?.finalFilesAvailable}
+          onPress={() => {}}
         />
       </View>
     </View>
@@ -240,7 +259,7 @@ function MetaItem({ label, value }) {
 }
 
 function MetaLink({ label, value }) {
-  const isNA = !value || value === "N/A";
+  const isNA = value === "N/A";
   return (
     <View style={{ flex: 1 }}>
       <Text style={styles.metaLabel}>{label}</Text>
@@ -254,7 +273,7 @@ function MetaLink({ label, value }) {
   );
 }
 
-function FileButton({ label, available, onPress }) {
+function FileButton({ label, available, onPress, icon }) {
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -262,8 +281,8 @@ function FileButton({ label, available, onPress }) {
       disabled={!available}
     >
       <Ionicons
-        name="eye-outline"
-        size={18}
+        name={icon}
+        size={14}
         color={available ? "#fff" : COLORS.TEXT_SECONDARY}
       />
       <Text
@@ -278,15 +297,11 @@ function FileButton({ label, available, onPress }) {
   );
 }
 
-/* STYLES */
+/* ===================== STYLES ===================== */
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.BG,
-  },
+  safeArea: { flex: 1, backgroundColor: COLORS.BG },
 
-  /* DASHBOARD-LIKE HEADER */
   header: {
     backgroundColor: COLORS.PRIMARY,
     paddingHorizontal: 16,
@@ -296,11 +311,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
   avatar: {
     width: 34,
     height: 34,
@@ -315,6 +326,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginLeft: 92,
   },
+
   notification: { position: "relative" },
   notificationBadge: {
     position: "absolute",
@@ -329,12 +341,8 @@ const styles = StyleSheet.create({
   },
   notificationText: { color: "#fff", fontSize: 10, fontWeight: "600" },
 
-  listContent: {
-    padding: 16,
-    paddingBottom: 32,
-  },
+  listContent: { padding: 16, paddingBottom: 32 },
 
-  /* SEARCH */
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -347,13 +355,24 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 10,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
+  searchInput: { flex: 1, fontSize: 14, color: COLORS.TEXT_PRIMARY },
+
+  emptyState: {
+    alignItems: "center",
+    marginTop: 40,
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
     color: COLORS.TEXT_PRIMARY,
   },
+  emptySub: {
+    fontSize: 13,
+    color: COLORS.TEXT_SECONDARY,
+    textAlign: "center",
+  },
 
-  /* BIG PRIMARY NAV BUTTONS */
   primaryButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -375,14 +394,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     color: "#fff",
-    marginBottom: 2,
   },
-  primaryButtonSub: {
-    fontSize: 12,
-    color: "#E5E7EB",
-  },
+  primaryButtonSub: { fontSize: 12, color: "#E5E7EB" },
 
-  /* SECTION HEADER */
   sectionHeader: {
     marginTop: 18,
     marginBottom: 12,
@@ -394,11 +408,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: COLORS.TEXT_PRIMARY,
-    marginBottom: 2,
-  },
-  sectionSub: {
-    fontSize: 12,
-    color: COLORS.TEXT_SECONDARY,
   },
   countPill: {
     backgroundColor: COLORS.CARD_BG,
@@ -408,12 +417,8 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
   },
-  countText: {
-    color: COLORS.TEXT_PRIMARY,
-    fontWeight: "700",
-  },
+  countText: { fontWeight: "700" },
 
-  /* COMPLETED ORDER CARD */
   orderCard: {
     backgroundColor: COLORS.CARD_BG,
     borderRadius: 18,
@@ -421,15 +426,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.BORDER,
   },
-
   rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
     marginBottom: 10,
-    gap: 10,
   },
-
   orderAddress: {
     flex: 1,
     fontSize: 14,
@@ -443,7 +445,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
   },
-
   statusText: {
     color: "#16A34A",
     fontSize: 12,
@@ -455,19 +456,16 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 10,
   },
-
   metaLabel: {
     fontSize: 11,
     color: COLORS.TEXT_SECONDARY,
     marginBottom: 3,
   },
-
   metaValue: {
     fontSize: 13,
     color: COLORS.TEXT_PRIMARY,
     fontWeight: "600",
   },
-
   linkText: {
     color: COLORS.LINK,
     textDecorationLine: "underline",
@@ -478,7 +476,6 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 6,
   },
-
   fileBtn: {
     flex: 1,
     backgroundColor: COLORS.PRIMARY,
@@ -489,11 +486,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
   },
-
-  fileBtnDisabled: {
-    backgroundColor: "#E5E7EB",
-  },
-
+  fileBtnDisabled: { backgroundColor: "#E5E7EB" },
   fileBtnText: {
     color: "#fff",
     fontWeight: "700",

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../context/AuthContext";
+import { useNavigation } from "@react-navigation/native";
+import * as SecureStore from "expo-secure-store";
+import { apiFetch } from "../api/client";
+
 
 /* THEME  */
 const PRIMARY = "#0c4a6e";
@@ -36,9 +41,77 @@ export default function Dashboard() {
   const [fromDate, setFromDate] = useState({ day: 26, month: 11, year: 2025 });
   const [toDate, setToDate] = useState({ day: 26, month: 11, year: 2025 });
   const [pickerType, setPickerType] = useState(null);
+// const { getToken } = useAuth();
+  const [stats, setStats] = useState(null);
+  const [loadingStats, setLoadingStats] = useState(false);
+
+  const { logout } = useAuth();
+  const [menuVisible, setMenuVisible] = useState(false);
+  const navigation = useNavigation();
+
+  const [authReady, setAuthReady] = useState(false); // ✅ added
 
   const formatDate = (d) =>
     `${String(d.day).padStart(2, "0")}/${String(d.month + 1).padStart(2, "0")}/${d.year}`;
+
+  const toApiDate = ({ day, month, year }) => {
+    const m = String(month + 1).padStart(2, "0");
+    const d = String(day).padStart(2, "0");
+    return `${year}-${m}-${d}`;
+  };
+
+  const safePercent = (part, total) => {
+    if (!total || total <= 0) return "0%";
+    return `${Math.round((part / total) * 100)}%`;
+  };
+
+const fetchStats = async (useFilters = false) => {
+  try {
+    setLoadingStats(true);
+
+    let path = "/ordersstats";
+    if (useFilters) {
+      path += `?from_date=${toApiDate(fromDate)}&to_date=${toApiDate(toDate)}`;
+    }
+
+    const data = await apiFetch(path, {}, async () => {
+      await logout();
+      navigation.replace("Login");
+    });
+
+    setStats(data);
+  } catch (e) {
+    console.log("Failed to load dashboard stats", e?.message || e);
+  } finally {
+    setLoadingStats(false);
+  }
+};
+
+
+  // ✅ Auth bootstrap check ONCE (prevents 1-sec logout loop)
+  useEffect(() => {
+    const boot = async () => {
+      try {
+        const token = await SecureStore.getItemAsync("token");
+        if (!token) {
+          await logout();
+          navigation.replace("Login");
+          return;
+        }
+        setAuthReady(true);
+      } catch (e) {
+        console.log("Auth bootstrap failed", e);
+        await logout();
+        navigation.replace("Login");
+      }
+    };
+    boot();
+  }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    fetchStats(false); // auto load all-time stats
+  }, [authReady]);
 
   const onConfirmDate = (date) => {
     if (pickerType === "from") setFromDate(date);
@@ -53,9 +126,12 @@ export default function Dashboard() {
       {/* HEADER */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={styles.avatar}>
+          <Pressable
+            style={styles.avatar}
+            onPress={() => setMenuVisible(true)}
+          >
             <Ionicons name="person" size={18} color="#fff" />
-          </View>
+          </Pressable>
           <Text style={styles.headerTitle}>Dashboard</Text>
         </View>
 
@@ -67,12 +143,7 @@ export default function Dashboard() {
         </View>
       </View>
 
-      {/* SCROLLABLE CONTENT */}
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* WELCOME */}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.welcome}>Welcome back,</Text>
         <Text style={styles.company}>Interstellar Institute</Text>
 
@@ -97,13 +168,21 @@ export default function Dashboard() {
           </View>
 
           <View style={styles.actionsRow}>
-            <TouchableOpacity style={styles.primaryBtn}>
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={() => fetchStats(true)}
+              disabled={loadingStats}
+            >
               <Ionicons name="search" size={16} color="#fff" />
-              <Text style={styles.primaryBtnText}>Apply Filters</Text>
+              <Text style={styles.primaryBtnText}>
+                {loadingStats ? "Loading..." : "Apply Filters"}
+              </Text>
             </TouchableOpacity>
 
-            <IconButton icon="refresh-outline" />
-            <IconButton icon="download-outline" />
+            <IconButton
+              icon="refresh-outline"
+              onPress={() => fetchStats(false)}
+            />
           </View>
         </View>
 
@@ -111,33 +190,78 @@ export default function Dashboard() {
         <StatsSection
           title="Orders Statistics"
           totalLabel="Total Orders"
-          totalValue="12"
-          left={{ label: "In Process", value: "5", percent: "45%" }}
-          right={{ label: "Completed", value: "7", percent: "65%" }}
+          totalValue={stats?.total_orders ?? "--"}
+          left={{
+            label: "In Process",
+            value: stats?.in_process_orders ?? "--",
+            percent: stats
+              ? safePercent(stats.in_process_orders, stats.total_orders)
+              : "0%",
+          }}
+          right={{
+            label: "Completed",
+            value: stats?.completed_orders ?? "--",
+            percent: stats
+              ? safePercent(stats.completed_orders, stats.total_orders)
+              : "0%",
+          }}
         />
 
         {/* AMENDMENTS */}
         <StatsSection
           title="Amendments Statistics"
           totalLabel="Total Amendments"
-          totalValue="9"
-          left={{ label: "In Process", value: "3", percent: "30%" }}
-          right={{ label: "Completed", value: "6", percent: "60%" }}
+          totalValue={stats?.total_amendments ?? "--"}
+          left={{
+            label: "In Process",
+            value: stats?.in_process_amendments ?? "--",
+            percent: stats
+              ? safePercent(stats.in_process_amendments, stats.total_amendments)
+              : "0%",
+          }}
+          right={{
+            label: "Completed",
+            value: stats?.completed_amendments ?? "--",
+            percent: stats
+              ? safePercent(stats.completed_amendments, stats.total_amendments)
+              : "0%",
+          }}
         />
       </ScrollView>
 
-      {/* DATE PICKER */}
       <DatePickerModal
         visible={!!pickerType}
         initial={pickerType === "from" ? fromDate : toDate}
         onClose={() => setPickerType(null)}
         onConfirm={onConfirmDate}
       />
+
+      {/* PROFILE MENU */}
+      <Modal transparent visible={menuVisible} animationType="fade">
+        <Pressable
+          style={styles.menuOverlay}
+          onPress={() => setMenuVisible(false)}
+        >
+          <View style={styles.menuBox}>
+            <Pressable
+              style={styles.menuItem}
+              onPress={async () => {
+                setMenuVisible(false);
+                await logout();
+                navigation.replace("Login");
+              }}
+            >
+              <Ionicons name="log-out-outline" size={18} color="#DC2626" />
+              <Text style={styles.menuText}>Logout</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-/*  COMPONENTS  */
+/* COMPONENTS (UNCHANGED) */
 
 function DateInput({ label, value, onPress }) {
   return (
@@ -151,9 +275,9 @@ function DateInput({ label, value, onPress }) {
   );
 }
 
-function IconButton({ icon }) {
+function IconButton({ icon, onPress }) {
   return (
-    <TouchableOpacity style={styles.iconBtn}>
+    <TouchableOpacity style={styles.iconBtn} onPress={onPress}>
       <Ionicons name={icon} size={18} color={PRIMARY} />
     </TouchableOpacity>
   );
@@ -162,35 +286,23 @@ function IconButton({ icon }) {
 function StatsSection({ title, totalLabel, totalValue, left, right }) {
   return (
     <View style={styles.section}>
-<View style={styles.sectionHeader}>
-  <Ionicons
-    name={title.includes("Order") ? "cube-outline" : "document-text-outline"}
-    size={20}
-    color={TEXT_SECONDARY}
-  />
-  <Text style={styles.sectionTitle}>{title}</Text>
-</View>
+      <View style={styles.sectionHeader}>
+        <Ionicons
+          name={title.includes("Order") ? "cube-outline" : "document-text-outline"}
+          size={20}
+          color={TEXT_SECONDARY}
+        />
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
+
       <View style={[styles.card, styles.totalCard]}>
-  <View style={styles.totalRow}>
-    <View>
-      <Text style={styles.totalLabel}>{totalLabel}</Text>
-      <Text style={styles.totalValue}>{totalValue}</Text>
-    </View>
-
-    <View style={styles.totalIcon}>
-      <Ionicons
-        name={
-          totalLabel.includes("Order")
-            ? "stats-chart-outline"
-            : "document-outline"
-        }
-        size={32}
-        color={PRIMARY}
-      />
-    </View>
-  </View>
-</View>
-
+        <View style={styles.totalRow}>
+          <View>
+            <Text style={styles.totalLabel}>{totalLabel}</Text>
+            <Text style={styles.totalValue}>{totalValue}</Text>
+          </View>
+        </View>
+      </View>
 
       <View style={styles.row}>
         <MiniStat {...left} />
@@ -205,7 +317,6 @@ function MiniStat({ label, value, percent }) {
     <View style={[styles.card, styles.miniCard]}>
       <Text style={styles.miniValue}>{value}</Text>
       <Text style={styles.miniLabel}>{label}</Text>
-
       <View style={styles.progress}>
         <View style={[styles.progressFill, { width: percent }]} />
       </View>
@@ -213,70 +324,6 @@ function MiniStat({ label, value, percent }) {
   );
 }
 
-/* DATE PICKER */
-
-function DatePickerModal({ visible, initial, onClose, onConfirm }) {
-  const [day, setDay] = useState(initial.day);
-  const [month, setMonth] = useState(initial.month);
-  const [year, setYear] = useState(initial.year);
-
-  return (
-    <Modal transparent visible={visible} animationType="fade">
-      <View style={styles.modalOverlay}>
-        <View style={styles.modal}>
-          <Text style={styles.modalTitle}>Select Date</Text>
-
-          <View style={styles.pickerRow}>
-            <PickerColumn data={days} value={day} onSelect={setDay} />
-            <PickerColumn
-              data={months}
-              value={months[month]}
-              onSelect={(v) => setMonth(months.indexOf(v))}
-            />
-            <PickerColumn data={years} value={year} onSelect={setYear} />
-          </View>
-
-          <View style={styles.modalActions}>
-            <TouchableOpacity onPress={onClose}>
-              <Text style={styles.modalCancel}>Cancel</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => onConfirm({ day, month, year })}
-            >
-              <Text style={styles.modalConfirm}>Confirm</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-function PickerColumn({ data, value, onSelect }) {
-  return (
-    <FlatList
-      data={data}
-      keyExtractor={(i) => i.toString()}
-      style={{ height: 140 }}
-      showsVerticalScrollIndicator={false}
-      renderItem={({ item }) => (
-        <Pressable onPress={() => onSelect(item)}>
-          <Text
-            style={[
-              styles.pickerItem,
-              item === value && styles.pickerActive,
-            ]}
-          >
-            {item}
-          </Text>
-        </Pressable>
-      )}
-    />
-  );
-}
-
-/* STYLES  */
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: BG },
@@ -482,4 +529,99 @@ totalIcon: {
 
   modalCancel: { color: TEXT_SECONDARY },
   modalConfirm: { color: PRIMARY, fontWeight: "600" },
+  menuOverlay: {
+  flex: 1,
+  backgroundColor: "rgba(0,0,0,0.15)",
+},
+
+menuBox: {
+  position: "absolute",
+  top: 60,
+  right: 16,
+  backgroundColor: "#fff",
+  borderRadius: 12,
+  paddingVertical: 8,
+  minWidth: 140,
+  shadowColor: "#000",
+  shadowOpacity: 0.15,
+  shadowRadius: 10,
+  elevation: 10,
+},
+
+menuItem: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 10,
+  paddingVertical: 12,
+  paddingHorizontal: 14,
+},
+
+menuText: {
+  fontSize: 14,
+  fontWeight: "600",
+  color: "#DC2626",
+},
+
 });
+/* DATE PICKER MODAL */
+
+function DatePickerModal({ visible, initial, onClose, onConfirm }) {
+  const [day, setDay] = useState(initial.day);
+  const [month, setMonth] = useState(initial.month);
+  const [year, setYear] = useState(initial.year);
+
+  return (
+    <Modal transparent visible={visible} animationType="fade">
+      <View style={styles.modalOverlay}>
+        <View style={styles.modal}>
+          <Text style={styles.modalTitle}>Select Date</Text>
+
+          <View style={styles.pickerRow}>
+            <PickerColumn data={days} value={day} onSelect={setDay} />
+            <PickerColumn
+              data={months}
+              value={months[month]}
+              onSelect={(v) => setMonth(months.indexOf(v))}
+            />
+            <PickerColumn data={years} value={year} onSelect={setYear} />
+          </View>
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={styles.modalCancel}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => onConfirm({ day, month, year })}
+            >
+              <Text style={styles.modalConfirm}>Confirm</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function PickerColumn({ data, value, onSelect }) {
+  return (
+    <FlatList
+      data={data}
+      keyExtractor={(i) => i.toString()}
+      style={{ height: 140 }}
+      showsVerticalScrollIndicator={false}
+      renderItem={({ item }) => (
+        <Pressable onPress={() => onSelect(item)}>
+          <Text
+            style={[
+              styles.pickerItem,
+              item === value && styles.pickerActive,
+            ]}
+          >
+            {item}
+          </Text>
+        </Pressable>
+      )}
+    />
+  );
+}

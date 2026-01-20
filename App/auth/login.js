@@ -1,13 +1,10 @@
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-
 import Animated, {
-  Easing,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -15,48 +12,53 @@ import {
   ImageBackground,
   Platform,
   KeyboardAvoidingView,
-  ScrollView,
   Pressable,
   Switch,
-  useWindowDimensions,
+  ScrollView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from "react-native";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-import FloatingInput from "../components/FloatingInput"
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Formik } from "formik";
+import * as Yup from "yup";
+
+import FloatingInput from "../components/FloatingInput";
 import Loader from "../components/Loader";
+import { loginApi } from "../api/auth.api";
+import { useAuth } from "../context/AuthContext";
 
+/* ===================== VALIDATION ===================== */
 
+const LoginSchema = Yup.object().shape({
+  email: Yup.string()
+    .email("Enter a valid email address")
+    .required("Email is required"),
+  password: Yup.string().required("Password is required"),
+});
+
+/* ===================== SCREEN ===================== */
 
 export default function Login({ navigation }) {
-  // your existing code
-
-
-  const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { login } = useAuth();
 
-  const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
   const [remember, setRemember] = useState(true);
   const [loggingIn, setLoggingIn] = useState(false);
+  const [serverError, setServerError] = useState("");
 
   const compact = useSharedValue(0);
   const overlay = useSharedValue(0);
 
-  const onLoginPress = () => {
-    if (loggingIn) return;
-    setLoggingIn(true);
+  /* ===================== ANIMATIONS ===================== */
 
+  const startLoadingAnim = () => {
     compact.value = withTiming(1, { duration: 220 });
     overlay.value = withTiming(1, { duration: 220 });
+  };
 
-    setTimeout(() => {
-      overlay.value = withTiming(0, { duration: 200 });
-      compact.value = withTiming(0, { duration: 220 });
-      setLoggingIn(false);
-      navigation.replace("AppTabs");
-    }, 4200);
+  const stopLoadingAnim = () => {
+    overlay.value = withTiming(0, { duration: 200 });
+    compact.value = withTiming(0, { duration: 220 });
   };
 
   const cardAnimStyle = useAnimatedStyle(() => ({
@@ -68,161 +70,257 @@ export default function Login({ navigation }) {
 
   const overlayAnimStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: interpolate(overlay.value, [0, 1], [140, 0]) },
+      { translateY: interpolate(overlay.value, [0, 1], [120, 0]) },
     ],
     opacity: overlay.value,
   }));
 
+  /* ===================== LOGIN HANDLER ===================== */
+
+  const handleLogin = async (values) => {
+    if (loggingIn) return;
+
+    setServerError("");
+
+    try {
+      setLoggingIn(true);
+      startLoadingAnim();
+
+      const res = await loginApi(values.email, values.password);
+      await login(res.token);
+console.log("LOGIN SUCCESS, TOKEN SAVED");
+      navigation.replace("AppTabs");
+    } catch (err) {
+      setServerError(
+        err?.message || "Incorrect email or password. Please try again."
+      );
+    } finally {
+      stopLoadingAnim();
+      setLoggingIn(false);
+    }
+  };
+
   return (
-    <SafeAreaView style={styles.root } edges={['top', 'left', 'right']}>
+    <View style={styles.root}>
       <ImageBackground
         source={require("../assets/images/bg.png")}
-        style={styles.bg}
         resizeMode="cover"
+        style={styles.bg}
       >
-        <View style={styles.overlay} />
+        <View style={styles.bgOverlay} />
       </ImageBackground>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "undefined"}
-      >
-       <ScrollView
-  contentContainerStyle={{ paddingBottom: 20 }}
-  keyboardShouldPersistTaps="handled"
-  bounces={false}
->
+      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+        <KeyboardAvoidingView
+          style={styles.keyboardView}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.contentWrapper}>
+              <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                bounces={true}
+              >
+                <View style={styles.spacer} />
 
-          <Animated.View
-            style={[
-              styles.cardWrap,
-              {
-                marginTop: height * 0.42,
-                paddingTop: insets.top > 0 ? 16 : 24,
-              },
-              cardAnimStyle,
-            ]}
-          >
-            <Text style={styles.brand}>Benchmark</Text>
+                <Formik
+                  initialValues={{ email: "", password: "" }}
+                  validationSchema={LoginSchema}
+                  onSubmit={handleLogin}
+                >
+                  {({
+                    handleChange,
+                    handleSubmit,
+                    values,
+                    errors,
+                    touched,
+                    isValid,
+                  }) => (
+                    <>
+                      <Animated.View
+                        style={[
+                          styles.cardWrap,
+                          { paddingBottom: Math.max(insets.bottom, 22) },
+                          cardAnimStyle,
+                        ]}
+                      >
+                        <Text style={styles.brand}>Benchmark</Text>
+                        <Text style={styles.head}>Let's Get Started</Text>
+                        <Text style={styles.subhead}>
+                          Sign in to continue to your client portal.
+                        </Text>
 
-            <Text style={styles.head}>Let’s Get Started</Text>
-            <Text style={styles.subhead}>
-              Sign in to continue to your client portal.
-            </Text>
+                        {/* EMAIL */}
+                        <FloatingInput
+                          label="Email Address"
+                          value={values.email}
+                          onChangeText={(v) => {
+                            setServerError("");
+                            handleChange("email")(v);
+                          }}
+                          keyboardType="email-address"
+                          error={touched.email && errors.email}
+                        />
+                        {touched.email && errors.email && (
+                          <Text style={styles.errorText}>{errors.email}</Text>
+                        )}
 
-            <FloatingInput
-              label="Email Address"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              editable={!loggingIn}
-            />
+                        {/* PASSWORD */}
+                        <FloatingInput
+                          label="Password"
+                          value={values.password}
+                          onChangeText={(v) => {
+                            setServerError("");
+                            handleChange("password")(v);
+                          }}
+                          secureTextEntry
+                          onSubmitEditing={handleSubmit}
+                          error={touched.password && errors.password}
+                        />
+                        {touched.password && errors.password && (
+                          <Text style={styles.errorText}>{errors.password}</Text>
+                        )}
 
-            <FloatingInput
-              label="Password"
-              value={pass}
-              onChangeText={setPass}
-              secureTextEntry
-              onSubmitEditing={onLoginPress}
-              editable={!loggingIn}
-            />
+                        {/* SERVER ERROR */}
+                        {serverError ? (
+                          <Text style={styles.serverError}>{serverError}</Text>
+                        ) : null}
 
-            <View style={styles.rememberRow}>
-              <Switch
-                value={remember}
-                onValueChange={setRemember}
-                disabled={loggingIn}
-                trackColor={{ false: "#D1D5DB", true: "#7fb0c7" }}
-                thumbColor={remember ? "#0c4a6e" : "#f4f4f5"}
-              />
-              <Text style={styles.rememberText}>Remember me</Text>
+                        <View style={styles.rememberRow}>
+                          <Switch
+                            value={remember}
+                            onValueChange={setRemember}
+                            disabled={loggingIn}
+                            // color={"blue"}
+                          />
+                          <Text style={styles.rememberText}>Remember me</Text>
+                        </View>
+
+                        <Pressable
+                          onPress={handleSubmit}
+                          disabled={!isValid || loggingIn}
+                          style={[
+                            styles.loginBtn,
+                            (!isValid || loggingIn) && styles.disabledBtn,
+                          ]}
+                        >
+                          <Text style={styles.loginBtnText}>Log In</Text>
+                        </Pressable>
+                      </Animated.View>
+
+                      {/* LOADING OVERLAY */}
+                      <Animated.View
+                        pointerEvents={loggingIn ? "auto" : "none"}
+                        style={[styles.loginOverlay, overlayAnimStyle]}
+                      >
+                        <Text style={styles.overlayTitle}>Logging in…</Text>
+                        <Loader size={28} />
+                      </Animated.View>
+                    </>
+                  )}
+                </Formik>
+              </ScrollView>
             </View>
-
-            <Pressable
-              onPress={onLoginPress}
-              disabled={loggingIn}
-              style={[styles.loginBtn, loggingIn && { opacity: 0.7 }]}
-            >
-              <Text style={styles.loginBtnText}>Log In</Text>
-            </Pressable>
-          </Animated.View>
-      </ScrollView>
-      </KeyboardAvoidingView>
-
-      <Animated.View style={[styles.loginOverlay, overlayAnimStyle]}>
-        
-        <View style={{ marginLeft: 14 }}>
-          <Text style={styles.overlayTitle}>Logging in…</Text>
-          <Text style={styles.overlayText}>Please wait a moment</Text>
-        </View>
-        <View style={{marginLeft:137}}>
-        <Loader size={28} />
-        </View>
-      </Animated.View>
-    </SafeAreaView>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 }
 
+/* ===================== STYLES ===================== */
+
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#0c4a6e",
+  root: { 
+    flex: 1, 
+    backgroundColor: "#0c4a6e" 
   },
-  bg: {
-    position: "absolute",
-    width: "100%",
-    height: "100%",
-    
-    
+  bg: { 
+    ...StyleSheet.absoluteFillObject 
   },
-  overlay: {
+  bgOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(12,74,110,0.12)",
   },
-  cardWrap: {
-    width: "100%",
-borderTopLeftRadius: 25,
-borderTopRightRadius: 25,
-borderBottomLeftRadius: 0,
-borderBottomRightRadius: 0,
-    backgroundColor: "#fff",
-    
-    paddingHorizontal: 18,
-    paddingBottom: 22,
-    shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
+
+  safeArea: {
+    flex: 1,
   },
-  brand: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#0c4a6e",
+
+  keyboardView: {
+    flex: 1,
+  },
+
+  contentWrapper: {
+    flex: 1,
+  },
+
+  scrollContent: {
+    flexGrow: 1,
+  },
+
+  spacer: {
+    flex: 1,
+    minHeight: 100,
+  },
+
+  cardWrap: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 18,
+    paddingTop: 24,
+    paddingBottom: 22,
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+  },
+
+  brand: { 
+    fontSize: 20, 
+    fontWeight: "800", 
+    color: "#0c4a6e" 
+  },
+  head: { 
+    fontSize: 18, 
+    fontWeight: "800", 
+    marginTop: 8 
+  },
+  subhead: { 
+    fontSize: 13, 
+    opacity: 0.6, 
+    marginBottom: 14 
+  },
+
+  errorText: {
+    color: "#DC2626",
+    fontSize: 12,
+    marginTop: -8,
     marginBottom: 10,
   },
-  head: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111827",
-    marginBottom: 4,
-  },
-  subhead: {
+
+  serverError: {
+    color: "#DC2626",
     fontSize: 13,
-    color: "rgba(17,24,39,0.6)",
-    marginBottom: 14,
+    fontWeight: "600",
+    marginTop: 6,
+    marginBottom: 10,
+    textAlign: "center",
   },
+
   rememberRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
     marginVertical: 14,
+    // borderRadius:
   },
-  rememberText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "rgba(17,24,39,0.7)",
+
+  rememberText: { 
+    marginLeft: 10, 
+    fontWeight: "600", 
+    opacity: 0.7 
   },
+
   loginBtn: {
     height: 48,
     borderRadius: 12,
@@ -230,11 +328,15 @@ borderBottomRightRadius: 0,
     alignItems: "center",
     justifyContent: "center",
   },
-  loginBtnText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "800",
+  disabledBtn: { 
+    opacity: 0.6 
   },
+
+  loginBtnText: { 
+    color: "#fff", 
+    fontWeight: "800" 
+  },
+
   loginOverlay: {
     position: "absolute",
     bottom: 0,
@@ -244,22 +346,12 @@ borderBottomRightRadius: 0,
     backgroundColor: "#fff",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 22,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 10,
+    justifyContent: "center",
   },
-  overlayTitle: {
-    fontSize: 14,
-    fontWeight: "800",
+
+  overlayTitle: { 
+    fontWeight: "800", 
     color: "#0c4a6e",
-  },
-  overlayText: {
-    fontSize: 12,
-    color: "rgba(17,24,39,0.6)",
-    marginTop: 2,
+    marginRight: 25 
   },
 });
