@@ -13,7 +13,6 @@ import {
   Platform,
   KeyboardAvoidingView,
   Pressable,
-  Switch,
   ScrollView,
   TouchableWithoutFeedback,
   Keyboard,
@@ -27,20 +26,18 @@ import Loader from "../components/Loader";
 
 /* ===================== VALIDATION ===================== */
 
-const LoginSchema = Yup.object().shape({
+const ForgetPassSchema = Yup.object().shape({
   email: Yup.string()
     .email("Enter a valid email address")
     .required("Email is required"),
-  password: Yup.string().required("Password is required"),
 });
 
 /* ===================== SCREEN ===================== */
 
-export default function Login({ navigation }) {
+export default function ForgetPass({ navigation }) {
   const insets = useSafeAreaInsets();
 
-  const [remember, setRemember] = useState(true);
-  const [loggingIn, setLoggingIn] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState("");
 
   const compact = useSharedValue(0);
@@ -72,30 +69,26 @@ export default function Login({ navigation }) {
     opacity: overlay.value,
   }));
 
-  /* ===================== LOGIN HANDLER ===================== */
+  /* ===================== SUBMIT HANDLER ===================== */
 
-  const handleLogin = async (values) => {
-    if (loggingIn) return;
+  const handleSubmitEmail = async (values) => {
+    if (submitting) return;
 
     setServerError("");
 
     try {
-      setLoggingIn(true);
+      setSubmitting(true);
       startLoadingAnim();
 
       // API IMPLEMENTATION REMOVED (start fresh with new endpoints)
-      // const res = await loginApi(values.email, values.password);
-      // await login(res.token);
-      // console.log("LOGIN SUCCESS, TOKEN SAVED");
-      // navigation.replace("AppTabs");
+      // Example later:
+      // await forgotPasswordApi(values.email);
 
     } catch (err) {
-      setServerError(
-        err?.message || "Incorrect email or password. Please try again."
-      );
+      setServerError(err?.message || "Something went wrong. Please try again.");
     } finally {
       stopLoadingAnim();
-      setLoggingIn(false);
+      setSubmitting(false);
     }
   };
 
@@ -126,9 +119,9 @@ export default function Login({ navigation }) {
                 <View style={styles.spacer} />
 
                 <Formik
-                  initialValues={{ email: "", password: "" }}
-                  validationSchema={LoginSchema}
-                  onSubmit={handleLogin}
+                  initialValues={{ email: "" }}
+                  validationSchema={ForgetPassSchema}
+                  onSubmit={handleSubmitEmail}
                 >
                   {({
                     handleChange,
@@ -147,9 +140,9 @@ export default function Login({ navigation }) {
                         ]}
                       >
                         <Text style={styles.brand}>Benchmark</Text>
-                        <Text style={styles.head}>Let's Get Started</Text>
+                        <Text style={styles.head}>Forgot Password</Text>
                         <Text style={styles.subhead}>
-                          Sign in to continue to your client portal.
+                          Enter your email to receive a password reset link.
                         </Text>
 
                         {/* EMAIL */}
@@ -167,60 +160,39 @@ export default function Login({ navigation }) {
                           <Text style={styles.errorText}>{errors.email}</Text>
                         )}
 
-                        {/* PASSWORD */}
-                        <FloatingInput
-                          label="Password"
-                          value={values.password}
-                          onChangeText={(v) => {
-                            setServerError("");
-                            handleChange("password")(v);
-                          }}
-                          secureTextEntry
-                          onSubmitEditing={handleSubmit}
-                          error={touched.password && errors.password}
-                        />
-                        {touched.password && errors.password && (
-                          <Text style={styles.errorText}>{errors.password}</Text>
-                        )}
-
-                     <View style={styles.optionsRow}>
-  {/* REMEMBER ME */}
-  <View style={styles.rememberRow}>
-    <Switch
-      value={remember}
-      onValueChange={setRemember}
-      disabled={loggingIn}
-    />
-    <Text style={styles.rememberText}>Remember me</Text>
-  </View>
-
-  {/* FORGOT PASSWORD */}
-  <Pressable
-    onPress={() => navigation.navigate("ForgetPass")}
-    disabled={loggingIn}
-  >
-    <Text style={styles.forgotText}>Forgot Password?</Text>
-  </Pressable>
-</View>
+                        {/* SERVER ERROR */}
+                        {serverError ? (
+                          <Text style={styles.serverError}>{serverError}</Text>
+                        ) : null}
 
                         <Pressable
                           onPress={handleSubmit}
-                          disabled={!isValid || loggingIn}
+                          disabled={!isValid || submitting}
                           style={[
-                            styles.loginBtn,
-                            (!isValid || loggingIn) && styles.disabledBtn,
+                            styles.actionBtn,
+                            (!isValid || submitting) && styles.disabledBtn,
                           ]}
                         >
-                          <Text style={styles.loginBtnText}>Log In</Text>
+                          <Text style={styles.actionBtnText}>
+                            Send Reset Link
+                          </Text>
+                        </Pressable>
+
+                        <Pressable
+                          onPress={() => navigation.goBack()}
+                          disabled={submitting}
+                          style={styles.backWrap}
+                        >
+                          <Text style={styles.backText}>Back to Login</Text>
                         </Pressable>
                       </Animated.View>
 
                       {/* LOADING OVERLAY */}
                       <Animated.View
-                        pointerEvents={loggingIn ? "auto" : "none"}
-                        style={[styles.loginOverlay, overlayAnimStyle]}
+                        pointerEvents={submitting ? "auto" : "none"}
+                        style={[styles.overlay, overlayAnimStyle]}
                       >
-                        <Text style={styles.overlayTitle}>Logging in…</Text>
+                        <Text style={styles.overlayTitle}>Submitting…</Text>
                         <Loader size={28} />
                       </Animated.View>
                     </>
@@ -303,33 +275,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
- optionsRow: {
-  flexDirection: "row",
-  alignItems: "center",
-  justifyContent: "space-between",
-  marginVertical: 12,
-},
-
-rememberRow: {
-  flexDirection: "row",
-  alignItems: "center",
-},
-
-forgotText: {
-  color: "#0c4a6e",
-  fontWeight: "800",
-  fontSize: 13,
-  opacity: 0.9,
-},
-
-
-  forgotText: {
-    color: "#0c4a6e",
-    fontWeight: "800",
-    fontSize: 13,
-    opacity: 0.9,
-  },
-
   serverError: {
     color: "#DC2626",
     fontSize: 13,
@@ -339,36 +284,37 @@ forgotText: {
     textAlign: "center",
   },
 
-  rememberRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 14,
-    // borderRadius:
-  },
-
-  rememberText: { 
-    marginLeft: 10, 
-    fontWeight: "600", 
-    opacity: 0.7 
-  },
-
-  loginBtn: {
+  actionBtn: {
     height: 48,
     borderRadius: 12,
     backgroundColor: "#0c4a6e",
     alignItems: "center",
     justifyContent: "center",
+    marginTop: 12,
   },
+
   disabledBtn: { 
     opacity: 0.6 
   },
 
-  loginBtnText: { 
+  actionBtnText: { 
     color: "#fff", 
     fontWeight: "800" 
   },
 
-  loginOverlay: {
+  backWrap: {
+    alignSelf: "center",
+    marginTop: 14,
+  },
+
+  backText: {
+    color: "#0c4a6e",
+    fontWeight: "800",
+    fontSize: 13,
+    opacity: 0.9,
+  },
+
+  overlay: {
     position: "absolute",
     bottom: 0,
     left: 0,

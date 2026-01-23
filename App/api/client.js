@@ -1,6 +1,6 @@
 import { getToken, removeToken } from "../utils/token";
 
-const BASE_URL = "https://portal.benchmarkstudio.biz/mobile/api";
+const BASE_URL = "https://gpnxloiiuzquxmbcyqxv.supabase.co";
 
 /**
  * Main API helper

@@ -5,13 +5,14 @@ import { useAuth } from "../context/AuthContext";
 
 import Splash from "../auth/splash";
 import Login from "../auth/login";
+import ForgetPass from "../auth/ForgetPass"; // 👈 ADD
 import TabsNavigator from "../tabs/index";
 
 const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
   const { isAuthenticated, loading } = useAuth();
-console.log("ROOT NAV:", { loading, isAuthenticated });
+  console.log("ROOT NAV:", { loading, isAuthenticated });
 
   return (
     <NavigationContainer>
@@ -21,17 +22,20 @@ console.log("ROOT NAV:", { loading, isAuthenticated });
           animation: "fade",
         }}
       >
-        {/*  WAIT FOR AUTH HYDRATION */}
+        {/* WAIT FOR AUTH HYDRATION */}
         {loading && (
           <Stack.Screen name="Splash" component={Splash} />
         )}
 
-        {/*  AUTH STACK */}
+        {/* AUTH STACK */}
         {!loading && !isAuthenticated && (
-          <Stack.Screen name="Login" component={Login} />
+          <>
+            <Stack.Screen name="Login" component={Login} />
+            <Stack.Screen name="ForgetPass" component={ForgetPass} />
+          </>
         )}
 
-        {/*  APP STACK */}
+        {/* APP STACK */}
         {!loading && isAuthenticated && (
           <Stack.Screen name="AppTabs" component={TabsNavigator} />
         )}
