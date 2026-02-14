@@ -6,6 +6,7 @@ import InProcessOrders from "./InProcessOrders";
 import Colors from "../../constants/colors";
 import PendingOrders from "./PendingOrders";
 import CompletedOrders from "./CompletedOrders";
+import PlaceAmendment from "../amendments-tab/PlaceAmendment";
 
 const Stack = createNativeStackNavigator();
 
@@ -49,10 +50,15 @@ export default function OrdersStack() {
         }}
       />
       <Stack.Screen
-  name="CompletedOrders"
-  component={CompletedOrders}
-  options={{ headerShown: false }}
-/>
+        name="CompletedOrders"
+        component={CompletedOrders}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="PlaceAmendment"
+        component={PlaceAmendment}
+        options={{ headerShown: false }}
+      />
     </Stack.Navigator>
   );
 }

@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import Statistics from "./statistics";
 import OrdersStack from "./ordersTab";
-import AmendmentsStack from "./amendments-tab/amendments";
+import AmendmentsStack from "./amendments-tab";
 import PropertiesStack from "./propertiesTab";
 import Colors from "../constants/colors";
 
@@ -23,6 +23,8 @@ export default function TabsNavigator() {
           height: 64,
           paddingBottom: 10,
           paddingTop: 8,
+          backgroundColor: Colors.background,
+          borderTopColor: "#c8dde5",
         },
         tabBarIcon: ({ focused, color }) => {
           let icon;

@@ -21,10 +21,11 @@ import Spacing from "../constants/spacing";
 
 const PRIMARY = Colors.primary;
 const BG = Colors.background;
-const CARD_BG = Colors.cardBg;
+const CARD_BG = Colors.surfaceElevated || Colors.cardBg;
 const TEXT_PRIMARY = Colors.text;
 const TEXT_SECONDARY = Colors.textSecondary;
-const BORDER = Colors.border;
+const BORDER = Colors.surfaceBorder || Colors.border;
+const SHADOW = Colors.shadow || "#7fa2b4";
 
 const RANGE_PRESETS = [
   { key: "today", label: "Today" },
@@ -320,7 +321,7 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 18,
+    borderRadius: 20,
     paddingHorizontal: 18,
     paddingVertical: 18,
     marginBottom: 12,
@@ -328,8 +329,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     ...Platform.select({
-      ios: { shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 8 } },
-      android: { elevation: 4 },
+      ios: { shadowColor: SHADOW, shadowOpacity: 0.2, shadowRadius: 14, shadowOffset: { width: 0, height: 8 } },
+      android: { elevation: 2 },
     }),
   },
   statLeft: { flex: 1, paddingRight: 12 },
@@ -345,8 +346,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     ...Platform.select({
-      ios: { shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 5 } },
-      android: { elevation: 3 },
+      ios: { shadowColor: SHADOW, shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 5 } },
+      android: { elevation: 2 },
     }),
   },
 
@@ -354,12 +355,16 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_BG,
     borderWidth: 1,
     borderColor: BORDER,
-    borderRadius: 18,
+    borderRadius: 20,
     minHeight: 220,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18,
     marginBottom: 16,
+    ...Platform.select({
+      ios: { shadowColor: SHADOW, shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+      android: { elevation: 1 },
+    }),
   },
   recentIcon: {
     width: 64,
@@ -375,11 +380,15 @@ const styles = StyleSheet.create({
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.32)", justifyContent: "center", paddingHorizontal: 20 },
   presetPanel: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
+    backgroundColor: CARD_BG,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: BORDER,
     paddingVertical: 8,
+    ...Platform.select({
+      ios: { shadowColor: SHADOW, shadowOpacity: 0.14, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+      android: { elevation: 2 },
+    }),
   },
   presetRow: {
     minHeight: 48,

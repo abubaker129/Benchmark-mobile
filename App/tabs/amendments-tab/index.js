@@ -1,8 +1,7 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import amendments from "./amendments";
+import Amendments from "./amendments";
 import PlaceAmendment from "./PlaceAmendment";
-import Colors from "../../constants/colors";
 
 const Stack = createNativeStackNavigator();
 
@@ -11,18 +10,14 @@ export default function AmendmentsStack() {
     <Stack.Navigator>
       <Stack.Screen
         name="amendments"
-        component={amendments}
+        component={Amendments}
         options={{ headerShown: false }}
       />
 
       <Stack.Screen
         name="PlaceAmendment"
         component={PlaceAmendment}
-        options={{
-          title: "Place Amendment",
-          headerStyle: { backgroundColor: Colors.primary },
-          headerTintColor: "#fff",
-        }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

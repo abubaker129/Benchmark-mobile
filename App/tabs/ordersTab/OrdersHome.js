@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,21 +20,29 @@ import { useAuth } from "../../context/AuthContext";
 import AppHeader from "../../components/AppHeader";
 import Spacing from "../../constants/spacing";
 
-/* ===================== COLORS (FROM GLOBAL) ===================== */
 const COLORS = {
   PRIMARY: Colors.primary,
   BG: Colors.background,
-  CARD_BG: Colors.cardBg,
+  CARD_BG: Colors.surfaceElevated || Colors.cardBg,
   TEXT_PRIMARY: Colors.text,
   TEXT_SECONDARY: Colors.textSecondary,
-  BORDER: Colors.border,
-  LINK: "#2563eb",
+  BORDER: Colors.surfaceBorder || Colors.border,
+  SHADOW: Colors.shadow || "#7fa2b4",
 };
+
+const STATUS_OPTIONS = [
+  { label: "All Status", value: "all" },
+  { label: "Active", value: "active" },
+  { label: "Pending Review", value: "pending_review" },
+  { label: "Completed", value: "completed" },
+];
+
+const TIME_OPTIONS = ["All Time", "Last 7 days", "Last 30 days", "This Year"];
 
 const normalizeStatus = (status) => {
   const s = String(status || "").toLowerCase();
-  if (s === "active" || s === "in_process" || s === "in process") return "active";
-  if (s === "pending_review" || s === "pending review") return "pending_review";
+  if (["active", "in_process", "in process", "pending"].includes(s)) return "active";
+  if (["pending_review", "pending review", "pending_check", "checking"].includes(s)) return "pending_review";
   if (s === "completed") return "completed";
   return "other";
 };
@@ -46,29 +55,36 @@ const toTitleStatus = (status) => {
   return "N/A";
 };
 
-const formatDateTime = (iso) => {
+const formatDate = (iso) => {
   if (!iso) return "N/A";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "N/A";
-  return d.toLocaleString();
+  return d.toLocaleDateString();
+};
+
+const getStatusPill = (status) => {
+  const normalized = normalizeStatus(status);
+  if (normalized === "completed") return { text: "#0F766E", bg: "#CCFBF1" };
+  if (normalized === "pending_review") return { text: "#92400E", bg: "#FEF3C7" };
+  if (normalized === "active") return { text: "#1D4ED8", bg: "#DBEAFE" };
+  return { text: "#374151", bg: "#E5E7EB" };
 };
 
 const mapOrderFromSupabase = (row) => {
-  const propertyLabel = row?.property?.name || [row?.property?.street, row?.property?.city].filter(Boolean).join(", ") || "Property";
+  const propertyLabel =
+    row?.property?.name || [row?.property?.street, row?.property?.city].filter(Boolean).join(", ") || "Unknown property";
+
   return {
     id: row?.id ?? null,
-    addressOrderId: `${propertyLabel} - ${row?.order_number || "N/A"}`,
+    orderNumber: row?.order_number ?? "N/A",
+    propertyLabel,
     orderType: row?.order_type ?? "N/A",
     code: row?.order_number ?? "N/A",
-    status: toTitleStatus(row?.status),
-    preference: row?.notes ?? "N/A",
-    orderTime: formatDateTime(row?.created_at),
-    doneTime: formatDateTime(row?.completed_at),
-    originalLink: "N/A",
-    finalFilesLink: "N/A",
-    originalFilesAvailable: false,
-    finalFilesAvailable: false,
+    status: row?.status ?? "",
+    statusLabel: toTitleStatus(row?.status),
+    addressOrderId: `${propertyLabel} - ${row?.order_number || "N/A"}`,
     createdAt: row?.created_at ?? null,
+    completedAt: row?.completed_at ?? null,
   };
 };
 
@@ -76,8 +92,8 @@ export default function OrdersHome({ navigation }) {
   const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [orders, setOrders] = useState([]);
-  const [searchLoading, setSearchLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState("All Status");
+  const [loading, setLoading] = useState(true);
+  const [filterStatus, setFilterStatus] = useState("all");
   const [filterTime, setFilterTime] = useState("All Time");
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showTimeDropdown, setShowTimeDropdown] = useState(false);
@@ -96,132 +112,110 @@ export default function OrdersHome({ navigation }) {
     else navigation.openDrawer?.();
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      const parent = getDrawerParent();
-      parent?.closeDrawer?.();
-    }, [getDrawerParent])
-  );
-
   const loadOrders = useCallback(async () => {
     if (!user) {
       setOrders([]);
-      setSearchLoading(false);
+      setLoading(false);
       return;
     }
 
-    setSearchLoading(true);
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from("orders")
-        .select(`
-          *,
+        .select(
+          `
+          id,
+          order_number,
+          order_type,
+          status,
+          created_at,
+          completed_at,
           property:properties(id, name, street, city, zip, property_type)
-        `)
+        `
+        )
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       setOrders((data || []).map(mapOrderFromSupabase));
-    } catch (e) {
+    } catch (error) {
       setOrders([]);
+      Alert.alert("Failed to load orders", error?.message || "Please try again.");
     } finally {
-      setSearchLoading(false);
+      setLoading(false);
     }
   }, [user]);
 
-  useEffect(() => {
-    loadOrders();
-  }, [loadOrders]);
-
   useFocusEffect(
     useCallback(() => {
+      const parent = getDrawerParent();
+      parent?.closeDrawer?.();
       loadOrders();
-    }, [loadOrders])
+    }, [getDrawerParent, loadOrders])
   );
 
-  const handleSearchChange = (text) => {
-    setSearch(text);
-  };
-
   const filteredOrders = useMemo(() => {
-    let list = [...orders];
-
-    if (filterStatus === "Active") {
-      list = list.filter((o) => normalizeStatus(o.status) === "active");
-    } else if (filterStatus === "Pending Review") {
-      list = list.filter((o) => normalizeStatus(o.status) === "pending_review");
-    } else if (filterStatus === "Completed") {
-      list = list.filter((o) => normalizeStatus(o.status) === "completed");
-    }
-
-    if (filterTime !== "All Time") {
-      const now = new Date();
-      let start = null;
-      if (filterTime === "Last 7 days") {
-        start = new Date(now);
-        start.setDate(now.getDate() - 6);
-      } else if (filterTime === "Last 30 days") {
-        start = new Date(now);
-        start.setDate(now.getDate() - 29);
-      } else if (filterTime === "This Year") {
-        start = new Date(now.getFullYear(), 0, 1);
-      }
-
-      if (start) {
-        list = list.filter((o) => {
-          if (!o.createdAt) return false;
-          const created = new Date(o.createdAt);
-          return created >= start && created <= now;
-        });
-      }
-    }
-
     const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((o) => {
+
+    return orders.filter((order) => {
+      const statusMatch = filterStatus === "all" || normalizeStatus(order.status) === filterStatus;
+      if (!statusMatch) return false;
+
+      if (filterTime !== "All Time") {
+        const now = new Date();
+        let start = null;
+
+        if (filterTime === "Last 7 days") {
+          start = new Date(now);
+          start.setDate(now.getDate() - 6);
+        } else if (filterTime === "Last 30 days") {
+          start = new Date(now);
+          start.setDate(now.getDate() - 29);
+        } else if (filterTime === "This Year") {
+          start = new Date(now.getFullYear(), 0, 1);
+        }
+
+        if (start) {
+          if (!order.createdAt) return false;
+          const created = new Date(order.createdAt);
+          if (created < start || created > now) return false;
+        }
+      }
+
+      if (!q) return true;
       return (
-        String(o.addressOrderId || "").toLowerCase().includes(q) ||
-        String(o.code || "").toLowerCase().includes(q) ||
-        String(o.orderType || "").toLowerCase().includes(q)
+        String(order.addressOrderId || "").toLowerCase().includes(q) ||
+        String(order.code || "").toLowerCase().includes(q) ||
+        String(order.orderType || "").toLowerCase().includes(q)
       );
     });
   }, [orders, filterStatus, filterTime, search]);
 
   const activeCount = useMemo(() => filteredOrders.filter((o) => normalizeStatus(o.status) === "active").length, [filteredOrders]);
-  const pendingCount = useMemo(() => filteredOrders.filter((o) => normalizeStatus(o.status) === "pending_review").length, [filteredOrders]);
-  const completedCount = useMemo(() => filteredOrders.filter((o) => normalizeStatus(o.status) === "completed").length, [filteredOrders]);
+  const pendingCount = useMemo(
+    () => filteredOrders.filter((o) => normalizeStatus(o.status) === "pending_review").length,
+    [filteredOrders]
+  );
+  const completedCount = useMemo(
+    () => filteredOrders.filter((o) => normalizeStatus(o.status) === "completed").length,
+    [filteredOrders]
+  );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <AppHeader title="Orders" onMenuPress={openDrawer} />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <FlatList
           data={filteredOrders}
-          keyExtractor={(item, index) =>
-            item?.id ? String(item.id) : String(index)
-          }
+          keyExtractor={(item, index) => (item?.id ? String(item.id) : String(index))}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
             <>
-              {/* STAT CARDS */}
               <View style={styles.statsGrid}>
-                <StatCard
-                  icon="document-outline"
-                  iconColor="#2B9CCC"
-                  title="Active Orders"
-                  value={String(activeCount)}
-                />
-                <StatCard
-                  icon="time-outline"
-                  iconColor="#F59E0B"
-                  title="Pending Review"
-                  value={String(pendingCount)}
-                />
+                <StatCard icon="document-outline" iconColor="#2B9CCC" title="Active Orders" value={String(activeCount)} />
+                <StatCard icon="time-outline" iconColor="#F59E0B" title="Pending Review" value={String(pendingCount)} />
                 <StatCard
                   icon="checkmark-done-outline"
                   iconColor="#10B981"
@@ -231,42 +225,39 @@ export default function OrdersHome({ navigation }) {
                 />
               </View>
 
-              {/* SEARCH */}
               <View style={styles.searchBox}>
-                <Ionicons
-                  name="search-outline"
-                  size={20}
-                  color={COLORS.TEXT_SECONDARY}
-                />
+                <Ionicons name="search-outline" size={20} color={COLORS.TEXT_SECONDARY} />
                 <TextInput
-                  placeholder="Search by order ID or property..."
+                  placeholder="Search by order ID, property, or type..."
                   placeholderTextColor={COLORS.TEXT_SECONDARY}
                   style={styles.searchInput}
                   value={search}
-                  onChangeText={handleSearchChange}
+                  onChangeText={setSearch}
                 />
-                {searchLoading && (
-                  <ActivityIndicator
-                    size="small"
-                    color={COLORS.TEXT_SECONDARY}
-                  />
-                )}
               </View>
 
-              {/* FILTERS */}
               <View style={styles.filterRow}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.filterPill}
-                  onPress={() => setShowStatusDropdown(!showStatusDropdown)}
+                  onPress={() => {
+                    setShowStatusDropdown((prev) => !prev);
+                    setShowTimeDropdown(false);
+                  }}
                   activeOpacity={0.7}
                 >
                   <Ionicons name="funnel-outline" size={16} color={COLORS.TEXT_SECONDARY} />
-                  <Text style={styles.filterText}>{filterStatus}</Text>
+                  <Text style={styles.filterText}>
+                    {STATUS_OPTIONS.find((statusOption) => statusOption.value === filterStatus)?.label || "All Status"}
+                  </Text>
                   <Ionicons name="chevron-down" size={16} color={COLORS.TEXT_SECONDARY} />
                 </TouchableOpacity>
-                <TouchableOpacity 
+
+                <TouchableOpacity
                   style={styles.filterPill}
-                  onPress={() => setShowTimeDropdown(!showTimeDropdown)}
+                  onPress={() => {
+                    setShowTimeDropdown((prev) => !prev);
+                    setShowStatusDropdown(false);
+                  }}
                   activeOpacity={0.7}
                 >
                   <Ionicons name="calendar-outline" size={16} color={COLORS.TEXT_SECONDARY} />
@@ -275,50 +266,48 @@ export default function OrdersHome({ navigation }) {
                 </TouchableOpacity>
               </View>
 
-              {/* STATUS DROPDOWN */}
               {showStatusDropdown && (
                 <View style={styles.dropdown}>
-                  {["All Status", "Active", "Pending Review", "Completed"].map((status) => (
+                  {STATUS_OPTIONS.map((statusOption) => (
                     <TouchableOpacity
-                      key={status}
+                      key={statusOption.value}
                       style={styles.dropdownItem}
                       onPress={() => {
-                        setFilterStatus(status);
+                        setFilterStatus(statusOption.value);
                         setShowStatusDropdown(false);
                       }}
                     >
-                      <Ionicons 
-                        name={filterStatus === status ? "checkmark-circle" : "ellipse-outline"} 
-                        size={18} 
-                        color={filterStatus === status ? COLORS.PRIMARY : COLORS.TEXT_SECONDARY}
+                      <Ionicons
+                        name={filterStatus === statusOption.value ? "checkmark-circle" : "ellipse-outline"}
+                        size={18}
+                        color={filterStatus === statusOption.value ? COLORS.PRIMARY : COLORS.TEXT_SECONDARY}
                       />
-                      <Text style={[styles.dropdownText, filterStatus === status && { fontWeight: "800" }]}>
-                        {status}
+                      <Text style={[styles.dropdownText, filterStatus === statusOption.value && { fontWeight: "800" }]}>
+                        {statusOption.label}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               )}
 
-              {/* TIME DROPDOWN */}
               {showTimeDropdown && (
                 <View style={styles.dropdown}>
-                  {["All Time", "Last 7 days", "Last 30 days", "This Year"].map((time) => (
+                  {TIME_OPTIONS.map((timeOption) => (
                     <TouchableOpacity
-                      key={time}
+                      key={timeOption}
                       style={styles.dropdownItem}
                       onPress={() => {
-                        setFilterTime(time);
+                        setFilterTime(timeOption);
                         setShowTimeDropdown(false);
                       }}
                     >
-                      <Ionicons 
-                        name={filterTime === time ? "checkmark-circle" : "ellipse-outline"} 
-                        size={18} 
-                        color={filterTime === time ? COLORS.PRIMARY : COLORS.TEXT_SECONDARY}
+                      <Ionicons
+                        name={filterTime === timeOption ? "checkmark-circle" : "ellipse-outline"}
+                        size={18}
+                        color={filterTime === timeOption ? COLORS.PRIMARY : COLORS.TEXT_SECONDARY}
                       />
-                      <Text style={[styles.dropdownText, filterTime === time && { fontWeight: "800" }]}>
-                        {time}
+                      <Text style={[styles.dropdownText, filterTime === timeOption && { fontWeight: "800" }]}>
+                        {timeOption}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -326,26 +315,25 @@ export default function OrdersHome({ navigation }) {
               )}
             </>
           }
-          ListEmptyComponent={
-            !searchLoading && (
-              <View style={styles.emptyState}>
-                <View style={styles.emptyIcon}>
-                  <Ionicons name="document-text-outline" size={28} color={COLORS.TEXT_SECONDARY} />
-                </View>
-                <Text style={styles.emptyTitle}>No orders found</Text>
-                <Text style={styles.emptySub}>Create a property and place your first order.</Text>
-              </View>
-            )
-          }
-          renderItem={({ item }) => <CompletedOrderCard order={item} />}
+          renderItem={({ item }) => (
+            <OrderCard
+              order={item}
+              onPlaceAmend={() => navigation.navigate("PlaceAmendment", { orderId: item?.id })}
+            />
+          )}
+          ListEmptyComponent={!loading ? <EmptyState /> : null}
           ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         />
+
+        {loading && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={COLORS.PRIMARY} />
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
-
-/* ===================== COMPONENTS ===================== */
 
 function StatCard({ icon, iconColor, title, value, description, iconNudge = 0 }) {
   return (
@@ -365,74 +353,39 @@ function StatCard({ icon, iconColor, title, value, description, iconNudge = 0 })
   );
 }
 
-function PrimaryNavButton({ icon, title, subtitle, onPress }) {
-  return (
-    <TouchableOpacity onPress={onPress} style={styles.primaryButton}>
-      <View style={styles.primaryButtonIcon}>
-        <Ionicons name={icon} size={24} color="#fff" />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.primaryButtonTitle}>{title}</Text>
-        <Text style={styles.primaryButtonSub}>{subtitle}</Text>
-      </View>
-      <Ionicons name="chevron-forward-outline" size={20} color="#fff" />
-    </TouchableOpacity>
-  );
-}
-
-/* ===================== CARD (N/A SAFE) ===================== */
-
-function CompletedOrderCard({ order }) {
-  const safe = (v) => (v === undefined || v === null || v === "" ? "N/A" : v);
+function OrderCard({ order, onPlaceAmend }) {
+  const pill = getStatusPill(order?.status);
+  const isCompleted = normalizeStatus(order?.status) === "completed";
 
   return (
-    <View style={styles.orderCard}>
+    <View style={styles.card}>
       <View style={styles.rowBetween}>
-        <Text style={styles.orderAddress} numberOfLines={2}>
-          {safe(order?.addressOrderId)}
-        </Text>
-        <View style={styles.statusPill}>
-          <Text style={styles.statusText}>
-            {safe(order?.status || "Completed")}
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <Text style={styles.orderCode}>{order?.orderNumber || "N/A"}</Text>
+          <Text style={styles.propertyText} numberOfLines={1}>
+            {order?.propertyLabel || "Unknown property"}
           </Text>
+        </View>
+        <View style={[styles.statusPill, { backgroundColor: pill.bg }]}>
+          <Text style={[styles.statusPillText, { color: pill.text }]}>{order?.statusLabel || "N/A"}</Text>
         </View>
       </View>
 
       <View style={styles.metaGrid}>
-        <MetaItem label="Order Type" value={safe(order?.orderType)} />
-        <MetaItem label="Code" value={safe(order?.code)} />
+        <MetaItem label="Order Type" value={order?.orderType || "N/A"} />
+        <MetaItem label="Code" value={order?.code || "N/A"} />
       </View>
 
-      <View style={styles.metaGrid}>
-        <MetaItem label="Preference" value={safe(order?.preference)} />
-      </View>
-
-      <View style={styles.metaGrid}>
-        <MetaItem label="Order Time" value={safe(order?.orderTime)} />
-        <MetaItem label="Done Time" value={safe(order?.doneTime)} />
-      </View>
-
-      <View style={styles.metaGrid}>
-        <MetaLink label="Original Link" value={safe(order?.originalLink)} />
-        <MetaLink
-          label="Final Files Link"
-          value={safe(order?.finalFilesLink)}
-        />
-      </View>
-
-      <View style={styles.filesRow}>
-        <FileButton
-          label="Request Amendment"
-          icon="create-outline"
-          available={!!order?.originalFilesAvailable}
-          onPress={() => {}}
-        />
-        <FileButton
-          label="Download Files"
-          icon="download-outline"
-          available={!!order?.finalFilesAvailable}
-          onPress={() => {}}
-        />
+      <View style={styles.cardFooter}>
+        <Text style={styles.cardMeta}>Created {formatDate(order?.createdAt)}</Text>
+        {isCompleted ? (
+          <TouchableOpacity style={styles.amendPill} onPress={onPlaceAmend} activeOpacity={0.8}>
+            <Ionicons name="create-outline" size={13} color={COLORS.PRIMARY} />
+            <Text style={styles.amendPillText}>Place an Amend</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.cardMeta}>Completed {formatDate(order?.completedAt)}</Text>
+        )}
       </View>
     </View>
   );
@@ -449,46 +402,17 @@ function MetaItem({ label, value }) {
   );
 }
 
-function MetaLink({ label, value }) {
-  const isNA = value === "N/A";
+function EmptyState() {
   return (
-    <View style={{ flex: 1 }}>
-      <Text style={styles.metaLabel}>{label}</Text>
-      <Text
-        style={[styles.metaValue, !isNA && styles.linkText]}
-        numberOfLines={2}
-      >
-        {value}
-      </Text>
+    <View style={styles.emptyState}>
+      <View style={styles.emptyIcon}>
+        <Ionicons name="document-outline" size={40} color={COLORS.PRIMARY} />
+      </View>
+      <Text style={styles.emptyTitle}>No orders found</Text>
+      <Text style={styles.emptySub}>Try changing filters or place a new order.</Text>
     </View>
   );
 }
-
-function FileButton({ label, available, onPress, icon }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[styles.fileBtn, !available && styles.fileBtnDisabled]}
-      disabled={!available}
-    >
-      <Ionicons
-        name={icon}
-        size={14}
-        color={available ? "#fff" : COLORS.TEXT_SECONDARY}
-      />
-      <Text
-        style={[
-          styles.fileBtnText,
-          !available && { color: COLORS.TEXT_SECONDARY },
-        ]}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-/* ===================== STYLES ===================== */
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.BG },
@@ -498,15 +422,15 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     backgroundColor: COLORS.CARD_BG,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: COLORS.BORDER,
     padding: 16,
     alignItems: "center",
     justifyContent: "center",
     ...Platform.select({
-      ios: { shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 6 } },
-      android: { elevation: 3 },
+      ios: { shadowColor: COLORS.SHADOW, shadowOpacity: 0.2, shadowRadius: 14, shadowOffset: { width: 0, height: 7 } },
+      android: { elevation: 2 },
     }),
   },
   statIcon: {
@@ -533,7 +457,11 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 10,
   },
-  searchInput: { flex: 1, fontSize: 15, color: COLORS.TEXT_PRIMARY, fontWeight: "500" },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.TEXT_PRIMARY,
+  },
 
   filterRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
   filterPill: {
@@ -543,7 +471,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     backgroundColor: COLORS.CARD_BG,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderWidth: 1,
@@ -553,14 +481,14 @@ const styles = StyleSheet.create({
 
   dropdown: {
     backgroundColor: COLORS.CARD_BG,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.BORDER,
     marginBottom: 16,
     overflow: "hidden",
     ...Platform.select({
-      ios: { shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
-      android: { elevation: 4 },
+      ios: { shadowColor: COLORS.SHADOW, shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
+      android: { elevation: 2 },
     }),
   },
   dropdownItem: {
@@ -597,93 +525,46 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_SECONDARY,
     textAlign: "center",
   },
-  sampleWrap: {
-    marginTop: 2,
-    gap: 12,
-  },
 
-  primaryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.PRIMARY,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-    gap: 14,
-  },
-  primaryButtonIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "#ffffff22",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  primaryButtonTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  primaryButtonSub: { fontSize: 12, color: "#E5E7EB" },
-
-  sectionHeader: {
-    marginTop: 18,
-    marginBottom: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.TEXT_PRIMARY,
-  },
-  countPill: {
+  card: {
     backgroundColor: COLORS.CARD_BG,
-    borderWidth: 1,
-    borderColor: COLORS.BORDER,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  countText: { fontWeight: "700" },
-
-  orderCard: {
-    backgroundColor: COLORS.CARD_BG,
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 16,
     borderWidth: 1,
     borderColor: COLORS.BORDER,
+    ...Platform.select({
+      ios: { shadowColor: COLORS.SHADOW, shadowOpacity: 0.16, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+      android: { elevation: 1 },
+    }),
   },
   rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 10,
+    alignItems: "center",
   },
-  orderAddress: {
-    flex: 1,
+  orderCode: {
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "800",
     color: COLORS.TEXT_PRIMARY,
   },
-
+  propertyText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: COLORS.TEXT_SECONDARY,
+  },
   statusPill: {
-    backgroundColor: "#DCFCE7",
+    borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 999,
   },
-  statusText: {
-    color: "#16A34A",
-    fontSize: 12,
+  statusPillText: {
     fontWeight: "700",
+    fontSize: 12,
   },
-
   metaGrid: {
     flexDirection: "row",
     gap: 12,
-    marginBottom: 10,
+    marginTop: 10,
   },
   metaLabel: {
     fontSize: 11,
@@ -695,30 +576,39 @@ const styles = StyleSheet.create({
     color: COLORS.TEXT_PRIMARY,
     fontWeight: "600",
   },
-  linkText: {
-    color: COLORS.LINK,
-    textDecorationLine: "underline",
-  },
-
-  filesRow: {
+  cardFooter: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.BORDER,
     flexDirection: "row",
-    gap: 12,
-    marginTop: 6,
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  fileBtn: {
-    flex: 1,
-    backgroundColor: COLORS.PRIMARY,
-    borderRadius: 14,
-    paddingVertical: 12,
+  cardMeta: {
+    fontSize: 12,
+    color: COLORS.TEXT_SECONDARY,
+  },
+  amendPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: `${COLORS.PRIMARY}44`,
+    backgroundColor: `${COLORS.PRIMARY}12`,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  amendPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.PRIMARY,
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
-  },
-  fileBtnDisabled: { backgroundColor: "#E5E7EB" },
-  fileBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 12,
+    backgroundColor: "rgba(255,255,255,0.55)",
   },
 });
