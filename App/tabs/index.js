@@ -2,9 +2,10 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 
-import Dashboard from "./dashboard";
+import Statistics from "./statistics";
 import OrdersStack from "./ordersTab";
 import AmendmentsStack from "./amendments-tab/amendments";
+import PropertiesStack from "./propertiesTab";
 import Colors from "../constants/colors";
 
 const Tab = createBottomTabNavigator();
@@ -12,6 +13,7 @@ const Tab = createBottomTabNavigator();
 export default function TabsNavigator() {
   return (
     <Tab.Navigator
+      initialRouteName="Statistics"
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarHideOnKeyboard: true,
@@ -25,10 +27,12 @@ export default function TabsNavigator() {
         tabBarIcon: ({ focused, color }) => {
           let icon;
 
-          if (route.name === "Dashboard") {
-            icon = focused ? "home" : "home-outline";
+          if (route.name === "Statistics") {
+            icon = focused ? "stats-chart" : "stats-chart-outline";
           } else if (route.name === "Orders") {
             icon = focused ? "cube" : "cube-outline";
+          } else if (route.name === "Properties") {
+            icon = focused ? "home" : "home-outline";
           } else if (route.name === "Amendments") {
             icon = focused
               ? "document-text"
@@ -39,7 +43,8 @@ export default function TabsNavigator() {
         },
       })}
     >
-      <Tab.Screen name="Dashboard" component={Dashboard} />
+      <Tab.Screen name="Statistics" component={Statistics} />
+      <Tab.Screen name="Properties" component={PropertiesStack} />
       <Tab.Screen name="Orders" component={OrdersStack} />
       <Tab.Screen name="Amendments" component={AmendmentsStack} />
     </Tab.Navigator>

@@ -15,14 +15,15 @@ import { Ionicons } from "@expo/vector-icons";
 import OrderCard from "../../components/OrderCard";
 import { searchCompletedOrders } from "../../api/orders.api";
 import { mapOrderFromApi } from "../../utils/orderMapper";
+import Colors from "../../constants/colors";
 
 const COLORS = {
-  PRIMARY: "#0c4a6e",
-  BG: "#ffffff",
-  CARD_BG: "#f3f6fb",
-  TEXT_PRIMARY: "#111827",
-  TEXT_SECONDARY: "#6b7280",
-  BORDER: "#e5e7eb",
+  PRIMARY: Colors.primary,
+  BG: Colors.background,
+  CARD_BG: Colors.cardBg,
+  TEXT_PRIMARY: Colors.text,
+  TEXT_SECONDARY: Colors.textSecondary,
+  BORDER: Colors.border,
 };
 
 export default function CompletedOrders() {

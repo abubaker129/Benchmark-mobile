@@ -17,6 +17,7 @@ import {
   ScrollView,
   TouchableWithoutFeedback,
   Keyboard,
+  StatusBar,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Formik } from "formik";
@@ -24,6 +25,8 @@ import * as Yup from "yup";
 
 import FloatingInput from "../components/FloatingInput";
 import Loader from "../components/Loader";
+import Colors from "../constants/colors";
+import { useAuth } from "../context/AuthContext";
 
 /* ===================== VALIDATION ===================== */
 
@@ -38,6 +41,7 @@ const LoginSchema = Yup.object().shape({
 
 export default function Login({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { login: authLogin } = useAuth();
 
   const [remember, setRemember] = useState(true);
   const [loggingIn, setLoggingIn] = useState(false);
@@ -83,16 +87,14 @@ export default function Login({ navigation }) {
       setLoggingIn(true);
       startLoadingAnim();
 
-      // API IMPLEMENTATION REMOVED (start fresh with new endpoints)
-      // const res = await loginApi(values.email, values.password);
-      // await login(res.token);
-      // console.log("LOGIN SUCCESS, TOKEN SAVED");
-      // navigation.replace("AppTabs");
+      const signInResult = await authLogin(values.email.trim(), values.password);
+      if (!signInResult?.session) {
+        throw new Error("Login succeeded but no active session was returned.");
+      }
+      navigation.replace("AppDrawer");
 
     } catch (err) {
-      setServerError(
-        err?.message || "Incorrect email or password. Please try again."
-      );
+      setServerError(err?.message || "Incorrect email or password. Please try again.");
     } finally {
       stopLoadingAnim();
       setLoggingIn(false);
@@ -101,6 +103,7 @@ export default function Login({ navigation }) {
 
   return (
     <View style={styles.root}>
+      <StatusBar backgroundColor={Colors.primary} barStyle="light-content" />
       <ImageBackground
         source={require("../assets/images/bg.png")}
         resizeMode="cover"
@@ -182,6 +185,9 @@ export default function Login({ navigation }) {
                         {touched.password && errors.password && (
                           <Text style={styles.errorText}>{errors.password}</Text>
                         )}
+                        {serverError ? (
+                          <Text style={styles.serverError}>{serverError}</Text>
+                        ) : null}
 
                      <View style={styles.optionsRow}>
   {/* REMEMBER ME */}
@@ -206,8 +212,9 @@ export default function Login({ navigation }) {
                         <Pressable
                           onPress={handleSubmit}
                           disabled={!isValid || loggingIn}
-                          style={[
+                          style={({ pressed }) => [
                             styles.loginBtn,
+                            pressed && styles.loginBtnPressed,
                             (!isValid || loggingIn) && styles.disabledBtn,
                           ]}
                         >
@@ -240,14 +247,14 @@ export default function Login({ navigation }) {
 const styles = StyleSheet.create({
   root: { 
     flex: 1, 
-    backgroundColor: "#0c4a6e" 
+    backgroundColor: Colors.primary 
   },
   bg: { 
     ...StyleSheet.absoluteFillObject 
   },
   bgOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(12,74,110,0.12)",
+    backgroundColor: "rgba(43,156,204,0.12)",
   },
 
   safeArea: {
@@ -283,7 +290,7 @@ const styles = StyleSheet.create({
   brand: { 
     fontSize: 20, 
     fontWeight: "800", 
-    color: "#0c4a6e" 
+    color: Colors.primary 
   },
   head: { 
     fontSize: 18, 
@@ -316,7 +323,7 @@ rememberRow: {
 },
 
 forgotText: {
-  color: "#0c4a6e",
+  color: Colors.primary,
   fontWeight: "800",
   fontSize: 13,
   opacity: 0.9,
@@ -324,7 +331,7 @@ forgotText: {
 
 
   forgotText: {
-    color: "#0c4a6e",
+    color: Colors.primary,
     fontWeight: "800",
     fontSize: 13,
     opacity: 0.9,
@@ -355,9 +362,13 @@ forgotText: {
   loginBtn: {
     height: 48,
     borderRadius: 12,
-    backgroundColor: "#0c4a6e",
+    backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
+  },
+  loginBtnPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.99 }],
   },
   disabledBtn: { 
     opacity: 0.6 
@@ -382,7 +393,7 @@ forgotText: {
 
   overlayTitle: { 
     fontWeight: "800", 
-    color: "#0c4a6e",
+    color: Colors.primary,
     marginRight: 25 
   },
 });

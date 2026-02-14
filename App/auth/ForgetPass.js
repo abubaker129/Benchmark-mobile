@@ -16,6 +16,7 @@ import {
   ScrollView,
   TouchableWithoutFeedback,
   Keyboard,
+  StatusBar,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Formik } from "formik";
@@ -23,6 +24,7 @@ import * as Yup from "yup";
 
 import FloatingInput from "../components/FloatingInput";
 import Loader from "../components/Loader";
+import Colors from "../constants/colors";
 
 /* ===================== VALIDATION ===================== */
 
@@ -94,6 +96,7 @@ export default function ForgetPass({ navigation }) {
 
   return (
     <View style={styles.root}>
+      <StatusBar backgroundColor={Colors.primary} barStyle="light-content" />
       <ImageBackground
         source={require("../assets/images/bg.png")}
         resizeMode="cover"
@@ -212,14 +215,14 @@ export default function ForgetPass({ navigation }) {
 const styles = StyleSheet.create({
   root: { 
     flex: 1, 
-    backgroundColor: "#0c4a6e" 
+    backgroundColor: Colors.primary 
   },
   bg: { 
     ...StyleSheet.absoluteFillObject 
   },
   bgOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(12,74,110,0.12)",
+    backgroundColor: "rgba(43,156,204,0.12)",
   },
 
   safeArea: {
@@ -255,7 +258,7 @@ const styles = StyleSheet.create({
   brand: { 
     fontSize: 20, 
     fontWeight: "800", 
-    color: "#0c4a6e" 
+    color: Colors.primary 
   },
   head: { 
     fontSize: 18, 
@@ -287,7 +290,7 @@ const styles = StyleSheet.create({
   actionBtn: {
     height: 48,
     borderRadius: 12,
-    backgroundColor: "#0c4a6e",
+    backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 12,
@@ -308,7 +311,7 @@ const styles = StyleSheet.create({
   },
 
   backText: {
-    color: "#0c4a6e",
+    color: Colors.primary,
     fontWeight: "800",
     fontSize: 13,
     opacity: 0.9,
@@ -328,7 +331,7 @@ const styles = StyleSheet.create({
 
   overlayTitle: { 
     fontWeight: "800", 
-    color: "#0c4a6e",
+    color: Colors.primary,
     marginRight: 25 
   },
 });

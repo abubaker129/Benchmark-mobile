@@ -1,14 +1,15 @@
 const Colors = {
-  primary: "#0c4a6e",
-  background: "#ffffffff",
-  cardBg: "#dde2dff3",
+  primary: "#2b9ccc",
+  background: "#f6fbff",
+  cardBg: "#ffffff",
   text: "#111827",
-  textSecondary: "#010308ff",
-  border: "#cad3e4ff",
+  textSecondary: "#6b7280",
+  border: "#e5e7eb",
   progressBg: "#a9bce2ff",
-  progressFill: "#0c4a6e",
-    placeholder: "#9CA3AF",
-  error: "#DC2626"
+  progressFill: "#2b9ccc",
+  placeholder: "#9CA3AF",
+  error: "#DC2626",
+  success: "#10b981",
 };
 
 export default Colors;

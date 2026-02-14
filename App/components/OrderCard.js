@@ -1,6 +1,7 @@
 import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import Colors from "../constants/colors";
 
 const safe = (v) =>
   v === undefined || v === null || v === "" ? "N/A" : v;
@@ -128,86 +129,98 @@ function ActionBtn({ label, icon, onPress, disabled }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: "#f3f6fb",
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: Colors.cardBg,
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: Colors.border,
+    marginBottom: 16,
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 16, shadowOffset: { width: 0, height: 10 } },
+      android: { elevation: 4 },
+    }),
   },
 
   rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 10,
+    marginBottom: 14,
+    alignItems: "flex-start",
   },
 
   address: {
     flex: 1,
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#111827",
+    fontSize: 15,
+    fontWeight: "800",
+    color: Colors.textPrimary,
+    marginRight: 12,
   },
 
   statusPill: {
     backgroundColor: "#DCFCE7",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
 
   statusText: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#16A34A",
   },
 
   metaRow: {
     flexDirection: "row",
-    gap: 12,
-    marginBottom: 10,
+    gap: 16,
+    marginBottom: 12,
   },
 
   label: {
     fontSize: 11,
-    color: "#6b7280",
-    marginBottom: 2,
+    color: Colors.textSecondary,
+    marginBottom: 4,
+    fontWeight: "600",
   },
 
   value: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#111827",
+    fontSize: 14,
+    fontWeight: "700",
+    color: Colors.textPrimary,
   },
 
   link: {
-    color: "#2563eb",
+    color: Colors.primary,
     textDecorationLine: "underline",
   },
 
   actions: {
     flexDirection: "row",
-    gap: 10,
-    marginTop: 6,
+    gap: 12,
+    marginTop: 10,
   },
 
   btn: {
     flex: 1,
     flexDirection: "row",
-    gap: 6,
-    backgroundColor: "#0c4a6e",
-    borderRadius: 12,
-    paddingVertical: 10,
+    gap: 8,
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    paddingVertical: 12,
     justifyContent: "center",
     alignItems: "center",
+    ...Platform.select({
+      ios: { shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
+      android: { elevation: 3 },
+    }),
   },
 
   btnDisabled: {
-    backgroundColor: "#E5E7EB",
+    backgroundColor: Colors.border,
   },
 
   btnText: {
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#fff",
   },
 });

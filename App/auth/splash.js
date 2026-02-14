@@ -1,31 +1,10 @@
 import { View, Text, StyleSheet, Dimensions } from "react-native";
-import { useEffect } from "react";
-import { getToken } from "../utils/token";
-import { useAuth } from "../context/AuthContext";
 import Loader from "../components/Loader";
+import Colors from "../constants/colors";
 
 const { width } = Dimensions.get("window");
 
-export default function Splash({ navigation }) {
-  const { login } = useAuth();
-
-  useEffect(() => {
-    const bootstrap = async () => {
-      const token = await getToken();
-
-      if (token) {
-        await login(token);
-        console.log("SPLASH MOUNTED");
-        navigation.replace("AppTabs");
-      } else {
-        navigation.replace("Login");
-      }
-    };
-
-    const timer = setTimeout(bootstrap, 2000);
-    return () => clearTimeout(timer);
-  }, []);
-
+export default function Splash() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Benchmark</Text>
@@ -42,7 +21,7 @@ export default function Splash({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0c4a6e",
+    backgroundColor: Colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
